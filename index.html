@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>GoogleDrive雲端檔案與作業比對</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"
+            integrity="sha512-jDEmOIskGs/j5S3wBWQAL4pOYy3S5a0y3Vav7BgXHnCVcUBXkf1OqzYS6njmDiKyqes22QEX8GSIZZ5pGk+9nA=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script
+            src="https://code.jquery.com/jquery-3.6.0.min.js"
+            integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
+            crossorigin="anonymous"></script>
+</head>
+<body>
+<h1>GoogleDrive雲端檔案與作業比對</h1>
+
+<p>請上傳學生名單(A1為"學生"，A2之後為學生名單學號，副檔名需為xls或xlsx)</p>
+
+
+<input type="file" onchange="importf(this)"/>
+<div id="status"></div>
+
+<hr>
+
+<p>請填入Google雲端資料夾ID(必須為公開連結)</p>
+<form id="theform">
+    <input type="text" size="40" id="folder_id" autocomplete="off" placeholder="請填入Google雲端資料夾ID"/>
+    <input type="submit" value="Submit" id="submitButton"/>
+</form>
+<div id="status2"></div>
+
+<hr>
+
+<button id="getResult" onclick="getResult()" disabled>點我比對未交作業的學生</button>
+
+<div id="result"></div>
+
+
+<script>
+    var cloud_file_list = [];
+    var check_code = "";
+
+
+    document.getElementById('theform').onsubmit = function () {
+        console.log(document.getElementById('folder_id').value);
+        getCloudList(document.getElementById('folder_id').value)
+        return false;
+    };
+
+
+    function getCloudList(folderId) {
+
+        var api_key = 'AIzaSyBObqlpCmYzEgckb-aTPQaYvHvFiVGymjE';
+        // var folderId = '1S9k-1_-c8KYmoKGqo559jQsa9q64sUP7';
+        var url = "https://www.googleapis.com/drive/v3/files?q='" + folderId.trim() + "'+in+parents&key=" + api_key;
+        var promise = $.getJSON(url, function (data, status) {
+            // on success
+        });
+        promise.done(function (data) {
+            // console.log(data['files'][1]['name']);
+            file_list = [];
+
+            for (var item in data.files) {
+                file_list.push(data.files[item].name.toUpperCase());
+            }
+
+            cloud_file_list = file_list;
+            document.getElementById("status2").innerHTML = "讀取雲端資料夾完成，共有" + cloud_file_list.length + "資料夾或檔案";
+            document.getElementById("status2").style.color = '#5500FF'
+            check_code = check_code+"K";
+            if (check_code === "OK"){
+                document.getElementById("getResult").disabled = false;
+            }
+            console.log(cloud_file_list);
+        }).fail(function () {
+            document.getElementById("status2").innerHTML = "讀取雲端資料夾失敗，請確認資料夾ID是否正確或權限是否為已知連結公開";
+            document.getElementById("status2").style.color = '#FF0000'
+
+        });
+    }
+
+
+</script>
+
+
+<script>
+    /*
+    FileReader共有4種讀取方法：
+    1.readAsArrayBuffer(file)：將文件讀取為ArrayBuffer。
+    2.readAsBinaryString(file)：將文件讀取為二進位字元串
+    3.readAsDataURL(file)：將文件讀取為Data URL
+    4.readAsText(file, [encoding])：將檔讀取為文本，encoding缺省值為'UTF-8'
+                 */
+    var wb;//讀取完成的資料
+    var rABS = false; //是否將檔讀取為二進位字元串
+    var excel_list = [];
+
+
+    function importf(obj) {//導入
+        if (!obj.files) {
+            return;
+        }
+        var f = obj.files[0];
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var data = e.target.result;
+            if (rABS) {
+                wb = XLSX.read(btoa(fixdata(data)), {//手動轉化
+                    type: 'base64'
+                });
+            } else {
+                wb = XLSX.read(data, {
+                    type: 'binary'
+                });
+            }
+            //wb.SheetNames[0]是獲取Sheets中第一個Sheet的名字
+            //wb.Sheets[Sheet名]獲取第一個Sheet的資料
+
+
+            var student_list = [];
+            var students = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+            for (var student in students) {
+                student_list.push(students[student].學生.toUpperCase());
+            }
+            console.log(student_list);
+
+            excel_list = student_list;
+            // excel_list = ["ADT107145", "ADT105107", "ADT105109"];
+
+            document.getElementById("status").innerHTML = "讀取EXCEL學生名單完成，共有" + students.length + "位";
+            document.getElementById("status").style.color = '#5500FF'
+            check_code = check_code+"O";
+        };
+        if (rABS) {
+            reader.readAsArrayBuffer(f);
+        } else {
+            reader.readAsBinaryString(f);
+        }
+    }
+
+    function fixdata(data) { //文件流轉BinaryString
+        var o = "",
+            l = 0,
+            w = 10240;
+        for (; l < data.byteLength / w; ++l) o += String.fromCharCode.apply(null, new Uint8Array(data.slice(l * w, l * w + w)));
+        o += String.fromCharCode.apply(null, new Uint8Array(data.slice(l * w)));
+        return o;
+    }
+</script>
+
+<script>
+
+    function getResult() {
+
+        var checked_list = [];
+
+        for (var i = 0; i < cloud_file_list.length; i++) {
+            for (var j = 0; j < excel_list.length; j++) {
+                if (cloud_file_list[i].toString().includes(excel_list[j].toString())) {
+                    if (!checked_list.includes(excel_list[j])) {
+                        checked_list.push(excel_list[j]); // 已經繳交了
+                        console.log(excel_list[j]);
+                    }
+
+                }
+            }
+        }
+
+        var result_list = arr_diff(excel_list, checked_list).sort();
+
+        document.getElementById("result").style.color = '#0000CC'
+
+        var result = document.getElementById('result');
+        result.insertAdjacentHTML('beforeend', "以下為雲端資料夾中未發現作業的名單" + "<br>");
+        for(var x=0;x<result_list.length;x++){
+            result.insertAdjacentHTML('beforeend', result_list[x]+"<br>");
+        }
+
+
+        document.getElementById("getResult").disabled = true;
+
+
+
+
+    }
+
+    function arr_diff(a1, a2) {
+
+        var a = [], diff = [];
+
+        for (var i = 0; i < a1.length; i++) {
+            a[a1[i]] = true;
+        }
+
+        for (var i = 0; i < a2.length; i++) {
+            if (a[a2[i]]) {
+                delete a[a2[i]];
+            } else {
+                a[a2[i]] = true;
+            }
+        }
+
+        for (var k in a) {
+            diff.push(k);
+        }
+
+        return diff;
+    }
+
+
+</script>
+
+
+</body>
+</html>
+
